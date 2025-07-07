@@ -1,0 +1,39 @@
+name: upfromgede
+
+on: workflow_dispatch
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install gdown pyyaml
+
+      - name: Download and upload releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python <<EOF
+          import yaml, subprocess, os
+
+          with open('releases.yaml') as f:
+              data = yaml.safe_load(f)
+
+          for entry in data['releases']:
+              tag = entry['tag']
+              url = entry['url']
+              print(f"Processing {tag}: {url}")
+
+              # Download file
+              subprocess.run(f"gdown --fuzzy {url} -O downloaded_file", shell=True, check=True)
+              filename = os.listdir('.')[os.listdir('.').index('downloaded_file')]
+              # Rename file jika ingin pastikan nama asli, atau dibiarkan
+
+              # Buat release & upload (lewat gh cli)
+              subprocess.run(f"gh release create {tag} downloaded_file --title {tag} --notes 'Automated release for {tag}' --repo ${{GITHUB_REPOSITORY}}", shell=True, check=True)
+              os.remove('downloaded_file')
+          EOF
