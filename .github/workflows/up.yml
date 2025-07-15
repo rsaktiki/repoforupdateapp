@@ -24,4 +24,4 @@ jobs:
 
       - name: Run upload script
         run: |
-          python scripts/upload_releases.py
+          python upload_releases.py
