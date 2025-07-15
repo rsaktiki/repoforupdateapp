@@ -2,6 +2,9 @@ name: upfromgede
 
 on: workflow_dispatch
 
+permissions:
+  contents: write
+
 jobs:
   upload:
     runs-on: ubuntu-latest
