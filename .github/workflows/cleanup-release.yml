@@ -1,14 +1,14 @@
-name: Purge All Releases
+name: Purge All Releases and Tags
 
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Ketik HAPUS-SEMUA untuk konfirmasi penghapusan total'
+        description: 'Ketik HAPUS-SEMUA untuk eksekusi'
         required: true
         type: string
       dry_run:
-        description: 'Mode simulasi (true = cek saja, false = hapus permanen)'
+        description: 'true = hanya tampilkan daftar, false = hapus permanen'
         required: true
         default: 'true'
         type: choice
@@ -20,19 +20,39 @@ permissions:
   contents: write
 
 jobs:
-  purge-releases:
+  purge-all:
     if: github.event.inputs.confirm == 'HAPUS-SEMUA'
     runs-on: ubuntu-latest
     steps:
-      - name: Delete All Releases and Tags
-        uses: Nats-ji/delete-old-releases@master
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          keep-count: '0'
-          keep-old-minor-releases: 'false'
-          keep-old-minor-releases-by: 'minor'
-          keep-old-minor-releases-count: '0'
-          include-prerelease: 'true'
-          semver-loose: 'true'
-          remove-tags: 'true'
-          dry-run: ${{ inputs.dry_run }}
+      - name: Delete all GitHub Releases and their tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          # Ambil seluruh release (pagination otomatis via --paginate)
+          releases_json=$(gh api --paginate "repos/$REPO/releases" --jq '.[] | {id: .id, tag: .tag_name}')
+
+          if [ -z "$releases_json" ]; then
+            echo "Tidak ada release ditemukan."
+            exit 0
+          fi
+
+          echo "$releases_json" | jq -c '.' | while read -r item; do
+            id=$(echo "$item" | jq -r '.id')
+            tag=$(echo "$item" | jq -r '.tag')
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "[DRY-RUN] Akan menghapus release id=$id (tag: $tag)"
+            else
+              echo "Menghapus release id=$id (tag: $tag)..."
+              gh api -X DELETE "repos/$REPO/releases/$id"
+
+              if [ -n "$tag" ]; then
+                echo "Menghapus git ref tags/$tag..."
+                gh api -X DELETE "repos/$REPO/git/refs/tags/$tag" || true
+              fi
+            fi
+          done
