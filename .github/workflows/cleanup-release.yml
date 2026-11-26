@@ -1,0 +1,38 @@
+name: Purge All Releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Ketik HAPUS-SEMUA untuk konfirmasi penghapusan total'
+        required: true
+        type: string
+      dry_run:
+        description: 'Mode simulasi (true = cek saja, false = hapus permanen)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  purge-releases:
+    if: github.event.inputs.confirm == 'HAPUS-SEMUA'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete All Releases and Tags
+        uses: ./.github/actions/delete-old-releases # sesuaikan dengan path/repo action-mu
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          keep-count: '0'
+          keep-old-minor-releases: 'false'
+          keep-old-minor-releases-by: 'minor'
+          keep-old-minor-releases-count: '0'
+          include-prerelease: 'true'
+          semver-loose: 'true'
+          remove-tags: 'true'
+          dry-run: ${{ inputs.dry_run }}
