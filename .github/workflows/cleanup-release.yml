@@ -24,7 +24,12 @@ jobs:
     if: github.event.inputs.confirm == 'HAPUS-SEMUA'
     runs-on: ubuntu-latest
     steps:
-      - name: Delete all GitHub Releases and their tags
+      - name: Checkout repository for fallback tag deletion
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete all GitHub Releases and their associated tags
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -32,7 +37,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Ambil seluruh release (pagination otomatis via --paginate)
           releases_json=$(gh api --paginate "repos/$REPO/releases" --jq '.[] | {id: .id, tag: .tag_name}')
 
           if [ -z "$releases_json" ]; then
@@ -52,7 +56,40 @@ jobs:
 
               if [ -n "$tag" ]; then
                 echo "Menghapus git ref tags/$tag..."
-                gh api -X DELETE "repos/$REPO/git/refs/tags/$tag" || true
+                if ! gh api -X DELETE "repos/$REPO/git/refs/tags/$tag" 2>/dev/null; then
+                  echo "Fallback hapus tag via git push --delete: $tag"
+                  git push origin --delete "refs/tags/$tag" || true
+                fi
+              fi
+            fi
+          done
+
+      - name: Delete all remaining orphan Git tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          refs=$(gh api --paginate "repos/$REPO/git/matching-refs/tags/" --jq '.[].ref')
+
+          if [ -z "$refs" ]; then
+            echo "Tidak ada tag tersisa."
+            exit 0
+          fi
+
+          echo "$refs" | while read -r ref; do
+            tag_name="${ref#refs/tags/}"
+            tag_path="${ref#refs/}"
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "[DRY-RUN] Akan menghapus $ref"
+            else
+              echo "Menghapus $ref..."
+              if ! gh api -X DELETE "repos/$REPO/git/$tag_path" 2>/dev/null; then
+                echo "Fallback hapus tag via git push --delete: $tag_name"
+                git push origin --delete "refs/tags/$tag_name"
               fi
             fi
           done
