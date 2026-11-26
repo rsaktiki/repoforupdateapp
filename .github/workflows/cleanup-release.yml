@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete All Releases and Tags
-        uses: ./.github/actions/delete-old-releases # sesuaikan dengan path/repo action-mu
+        uses: Nats-ji/delete-old-releases@master
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           keep-count: '0'
